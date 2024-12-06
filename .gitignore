@@ -15,3 +15,5 @@
 *.tar.gz
 *.rar
 
+/dist/
+/build/
