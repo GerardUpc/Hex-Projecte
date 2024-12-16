@@ -26,14 +26,14 @@ public class Game {
             @Override
             public void run() {
                 
-                //IPlayer player2 = new H_E_X_Player(2/*GB*/);
+                IPlayer player2 = new H_E_X_Player(2/*GB*/);
                 
                 
                 //IPlayer player1 = new RandomPlayer("dwdw");
                 
                 IPlayer player1 = new PlayerMinimax(3);
                 
-                IPlayer player2 = new HumanPlayer("Human");
+                //IPlayer player2 = new HumanPlayer("Human");
                                 
                 new Board(player1 , player2, 11 /*mida*/,  10/*s*/, false);
              }

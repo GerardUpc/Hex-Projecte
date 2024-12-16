@@ -95,7 +95,7 @@ public class PlayerMinimax implements IPlayer, IAuto {
                 
                 int value = minMax(newBoard, depth - 1, false, alfa, Integer.MAX_VALUE);
                 System.out.println("--" + x + " " + y);
-                System.out.println("value" + value);
+                System.out.println("VALUE: " + value);
                 if(value > bestValue) {
                     bestValue = value;
                     bestMove.x = x;
@@ -106,7 +106,7 @@ public class PlayerMinimax implements IPlayer, IAuto {
                 
                     System.out.println("BEST PATH" + playerPath.getPath());
                         
-                    System.out.println(playerPath.getTotalCost());
+                    //System.out.println(playerPath.getTotalCost());
                 }
                 
                 alfa = Math.max(alfa, bestValue);
@@ -125,8 +125,8 @@ public class PlayerMinimax implements IPlayer, IAuto {
         // **ALGORITME EN NIVELL MAX** //
         if (isMaximizing) { 
             
-            if(board.isGameOver() && board.GetWinner() == playertype) return 100000*depth;
-            else if(board.isGameOver() && board.GetWinner() != playertype) return -(100000*depth);
+            if(board.isGameOver() && board.GetWinner().equals(playertype)) return 100000*depth;
+            else if(board.isGameOver() && (!board.GetWinner().equals(playertype))) return -(100000*depth);
             else if (depth == 0 || (board.getMoves().isEmpty())) return evaluateBoard(board);
             
             int maxEval = Integer.MIN_VALUE;
@@ -199,12 +199,12 @@ public class PlayerMinimax implements IPlayer, IAuto {
         int playerCost = playerPath.getTotalCost();
         
         HexGraph a = new HexGraph(11, board);
-        // Obtener el coste del camino más corto para el oponente
+        //Obtener el coste del camino más corto para el oponente
         PathResult opponentPath = Dijkstra.dijkstraShortestPath(a, -player);
         int opponentCost = opponentPath.getTotalCost();
         // Calcular la heurística
 
-        return opponentCost -playerCost;
+        return 2*opponentCost - playerCost;
         
     }
     

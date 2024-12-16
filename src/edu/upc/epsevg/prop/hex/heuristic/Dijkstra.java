@@ -105,12 +105,49 @@ public class Dijkstra {
 
     
     private static int calculateEdgeWeight(Node current, Node neighbor, int player) {
-        if (neighbor.getStone() == player) return 1;      
-        if (neighbor.getStone() == -player) return 50000; 
-        return 2;                                         
+        int baseWeight = 2; 
+        int dynamicWeight = calculateDynamicWeight(current, neighbor, player, 11); 
+        return baseWeight + dynamicWeight;
     }
 
-    
+    private static int calculateDynamicWeight(Node current, Node neighbor, int player, int size) {
+        Point point = neighbor.getPoint();
+        int x = point.x, y = point.y;
+
+        // Proximitat a l'objectiu
+        //int proximity = (player == 1) ? size*2 - x : size*2 - y;
+        
+        int nearInfluence = 0;
+        
+        if(neighbor.getStone() == -player) nearInfluence = 500;
+        else if(neighbor.getStone() == player) nearInfluence = -7;
+        
+        // Influència directa dels veïns
+        int influence = calculateInfluence(current, neighbor, player);
+
+        // Pes combinat
+        return influence + nearInfluence;
+    }
+
+    private static int calculateInfluence(Node current, Node neighbor, int player) {
+        int influence = 0;
+
+        for (Node neighOfNeigh : neighbor.getNeighbors()) {
+            if(!neighOfNeigh.getPoint().equals(current.getPoint())){
+                if (neighOfNeigh.getStone() == 0) {
+                    influence -= 0;
+                } else if (neighOfNeigh.getStone() == -player) {
+                    influence += 2; 
+                }
+                else if (neighOfNeigh.getStone() == player) {
+                    influence -=1;
+                }
+            }
+        }
+
+        return influence;
+    }
+
     private static List<Point> reconstructPath(Node endNode) {
         List<Point> path = new ArrayList<>();
         Node current = endNode;

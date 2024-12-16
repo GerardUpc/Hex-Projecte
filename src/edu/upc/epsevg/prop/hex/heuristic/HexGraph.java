@@ -109,7 +109,8 @@ class Node {
 
 /**
  *
- * Implementation of a hashmap to store the adjaceny's of the Hex board graph
+ * Implementation of a hashmap to store the Hex board graph.
+ * Every node is the key of their neighbours.
  * 
  * @author GERARD
  */
@@ -193,6 +194,4 @@ public class HexGraph {
             System.out.println(node);
         }
     }
-   
-       
 }
