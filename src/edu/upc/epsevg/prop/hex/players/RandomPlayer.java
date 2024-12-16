@@ -7,6 +7,7 @@ import edu.upc.epsevg.prop.hex.IPlayer;
 import edu.upc.epsevg.prop.hex.MoveNode;
 import edu.upc.epsevg.prop.hex.PlayerMove;
 import edu.upc.epsevg.prop.hex.SearchType;
+import edu.upc.epsevg.prop.hex.heuristic.HexGraph;
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,7 +58,9 @@ public class RandomPlayer implements IPlayer, IAuto {
         for(  int i=0;i<s.getSize();i++){
           for(int k=0;k<s.getSize();k++){
               if(s.getPos(i, k)==0){
-                  if(freeCells==q) return new PlayerMove( new Point(i,k), 0L, 0, SearchType.RANDOM);
+                  if(freeCells==q){ 
+                      return new PlayerMove( new Point(i,k), 0L, 0, SearchType.RANDOM);
+                  }
                   freeCells++;
               }
             }  

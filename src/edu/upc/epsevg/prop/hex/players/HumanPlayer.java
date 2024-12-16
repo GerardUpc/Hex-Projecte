@@ -3,6 +3,7 @@ package edu.upc.epsevg.prop.hex.players;
 import edu.upc.epsevg.prop.hex.HexGameStatus;
 import edu.upc.epsevg.prop.hex.IPlayer;
 import edu.upc.epsevg.prop.hex.PlayerMove;
+import edu.upc.epsevg.prop.hex.heuristic.HexGraph;
 
 
 /**
@@ -26,6 +27,8 @@ public class HumanPlayer implements IPlayer {
      */
     @Override
     public PlayerMove move(HexGameStatus s) {
+
+        
         return null;
     }
 

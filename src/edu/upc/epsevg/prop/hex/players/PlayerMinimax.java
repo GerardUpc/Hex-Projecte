@@ -4,13 +4,16 @@
  */
 package edu.upc.epsevg.prop.hex.players;
 
+import edu.upc.epsevg.prop.hex.heuristic.Dijkstra;
 import edu.upc.epsevg.prop.hex.HexGameStatus;
+import edu.upc.epsevg.prop.hex.heuristic.HexGraph;
 import edu.upc.epsevg.prop.hex.IAuto;
 import edu.upc.epsevg.prop.hex.IPlayer;
 import edu.upc.epsevg.prop.hex.MoveNode;
 import edu.upc.epsevg.prop.hex.PlayerMove;
 import edu.upc.epsevg.prop.hex.PlayerType;
 import edu.upc.epsevg.prop.hex.SearchType;
+import edu.upc.epsevg.prop.hex.heuristic.Dijkstra.PathResult;
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,8 +28,10 @@ public class PlayerMinimax implements IPlayer, IAuto {
     public String name;
     public int depth;
     public int player;
+    public PlayerType playertype;
     public int leafCount = 0;
     public Boolean poda = true;
+    
     
     
     /**
@@ -65,15 +70,19 @@ public class PlayerMinimax implements IPlayer, IAuto {
     public PlayerMove move(HexGameStatus s) {
         
         player = s.getCurrentPlayerColor();
+        if(player == 1) playertype = PlayerType.PLAYER1;
+        else playertype = PlayerType.PLAYER2; 
+        
         leafCount = 0;
         
         int bestValue = Integer.MIN_VALUE;
         
         int alfa = Integer.MIN_VALUE;
         
-        Point bestMove = new Point(-1, -1);
+        Point bestMove = new Point(0, 0);
         
         int size = s.getSize();
+        System.out.println(s.getCurrentPlayerColor());
         
         // ** NODES DE PROFUNDITAT 1 DE MINIMAX (121 TAULERS) ** //
         for (int x = 0; x < size; x++) {
@@ -85,12 +94,19 @@ public class PlayerMinimax implements IPlayer, IAuto {
                 newBoard.placeStone(new Point(x, y));
                 
                 int value = minMax(newBoard, depth - 1, false, alfa, Integer.MAX_VALUE);
-                
+                System.out.println("--" + x + " " + y);
+                System.out.println("value" + value);
                 if(value > bestValue) {
                     bestValue = value;
                     bestMove.x = x;
                     bestMove.y = y;
                     
+                    HexGraph yes = new HexGraph(11, s);
+                    PathResult playerPath = Dijkstra.dijkstraShortestPath(yes, player);
+                
+                    System.out.println("BEST PATH" + playerPath.getPath());
+                        
+                    System.out.println(playerPath.getTotalCost());
                 }
                 
                 alfa = Math.max(alfa, bestValue);
@@ -105,11 +121,13 @@ public class PlayerMinimax implements IPlayer, IAuto {
     }
    
     private int minMax(HexGameStatus board, int depth, boolean isMaximizing, int alfa, int beta) {
-
-        if (depth == 0 || (board.getMoves().isEmpty())) return evaluateBoard(board);
         
         // **ALGORITME EN NIVELL MAX** //
         if (isMaximizing) { 
+            
+            if(board.isGameOver() && board.GetWinner() == playertype) return 100000*depth;
+            else if(board.isGameOver() && board.GetWinner() != playertype) return -(100000*depth);
+            else if (depth == 0 || (board.getMoves().isEmpty())) return evaluateBoard(board);
             
             int maxEval = Integer.MIN_VALUE;
             
@@ -123,7 +141,7 @@ public class PlayerMinimax implements IPlayer, IAuto {
                     
                     HexGameStatus newBoard = new HexGameStatus(board);
                     newBoard.placeStone(new Point(x, y));
-            
+                    
                     int eval = minMax(newBoard, depth - 1, true, alfa, beta);
                     
                     maxEval = Math.max(maxEval, eval);
@@ -138,6 +156,10 @@ public class PlayerMinimax implements IPlayer, IAuto {
         
         // **ALGORITME EN NIVELL MIN** //
         } else {
+            
+            if(board.isGameOver() && board.GetWinner() == playertype) return 100000*depth;
+            else if(board.isGameOver() && board.GetWinner() != playertype) return -(100000*depth);
+            else if (depth == 0 || (board.getMoves().isEmpty())) return evaluateBoard(board);
             
             int minEval = Integer.MAX_VALUE;
             
@@ -169,10 +191,21 @@ public class PlayerMinimax implements IPlayer, IAuto {
 
 
     int evaluateBoard(HexGameStatus board) {
-        leafCount++;
+        leafCount++; // Contador para evaluar hojas (nodos evaluados en el árbol de decisión)
+
+        HexGraph s = new HexGraph(11, board);
         
-        return 0;
-    
+        PathResult playerPath = Dijkstra.dijkstraShortestPath(s, player);
+        int playerCost = playerPath.getTotalCost();
+        
+        HexGraph a = new HexGraph(11, board);
+        // Obtener el coste del camino más corto para el oponente
+        PathResult opponentPath = Dijkstra.dijkstraShortestPath(a, -player);
+        int opponentCost = opponentPath.getTotalCost();
+        // Calcular la heurística
+
+        return opponentCost -playerCost;
+        
     }
     
 }
