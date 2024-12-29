@@ -20,8 +20,19 @@ import java.util.HashMap;
 import java.util.Map;
 
 
-/* Auxiliary data structure Node */
-class Node {
+
+
+/**
+ *
+ * Implementation of a hashmap to store the Hex board graph.
+ * Every node is the key of their neighbours.
+ * 
+ * @author GERARD
+ */
+public class HexGraph {
+    /* Auxiliary data structure Node */
+    
+public class Node {
     
     /* Basic data */
     private Point point;             // Cordenades x y             
@@ -31,7 +42,7 @@ class Node {
     /* Dijkstra data */
     private boolean state;           
     private int distance;            // Distancia desde el punt inicial
-    private Node predecessor;        // Node anterior al camí més curt
+    private List<Node> predecessors;  // Node anterior al camí més curt
     private List<Node> neighbors;
 
     /* Constructor */
@@ -40,8 +51,8 @@ class Node {
         this.stone = stone;
         
         this.state = false;
-        this.distance = Integer.MAX_VALUE;
-        this.predecessor = null;
+        this.distance = 777777777;
+        this.predecessors = new ArrayList<>();
         this.neighbors = new ArrayList<>();
 
     }
@@ -63,8 +74,8 @@ class Node {
         return distance;
     }
     
-    public Node getPredecessor() {
-        return predecessor;
+    public List<Node> getPredecessor() {
+        return predecessors;
     }
     
     public List<Node> getNeighbors() {
@@ -85,15 +96,21 @@ class Node {
         this.distance = distance;
     }
     
-    public void setPredecessor(Node predecessor) {
-        this.predecessor = predecessor;
-    }
+
     
     
     /* Other methods */
    
     public void addNeighbor(Node neighbor) {
         neighbors.add(neighbor);
+    }
+    
+    public void addPredecessor(Node predecessor) {
+        predecessors.add(predecessor);
+    }
+    
+    public void clearPredecessors() {
+        predecessors.clear();
     }
     
     @Override
@@ -103,27 +120,19 @@ class Node {
                 ", stone=" + stone +
                 ", neighbors=" + neighbors.size() +
                 ", state=" + state + 
+                ", predecesors=" + predecessors.size() +
                 '}';
     }
 }
-
-/**
- *
- * Implementation of a hashmap to store the Hex board graph.
- * Every node is the key of their neighbours.
- * 
- * @author GERARD
- */
-public class HexGraph {
     private Map<Point, Node> nodes;
     
     /* Constructor */
-    public HexGraph(int size, HexGameStatus s) {
+    public HexGraph(int size, HexGameStatus s, int player) {
         this.nodes = new HashMap<>();
-        initializeHexBoard(size, s);
+        initializeHexBoard(size, s, player);
     }
 
-    private void initializeHexBoard(int size, HexGameStatus s) {
+    private void initializeHexBoard(int size, HexGameStatus s, int player) {
     
         for (int x = 0; x < size; x++) {
             for (int y = 0; y < size; y++) {
@@ -135,23 +144,100 @@ public class HexGraph {
             }
         }
         
-        /* Neighbours connection... */
+         /* Creació dels super nodes... */
+         
+        int[][] cordinates = {
+            {-1, 5}, {11, 5}, {5, -1}, {5, 11}
+        };
+        
+        for(int[] cord : cordinates) {
+            
+            Point point = new Point(cord[0], cord[1]);
+                           
+            nodes.put(point, new Node(cord[0], cord[1], 10));  // Valor de la stone a 10 suposa un supernode.
+            
+        }
+        
+
+        /* Connexió dels veïns... */
         int[][] directions = {
             {-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, 1}, {1, -1}
         };
 
         for (Node node : nodes.values()) {
-            for (int[] dir : directions) {
-                int nx = node.getPoint().x + dir[0];
-                int ny = node.getPoint().y + dir[1];
+            
+            if(node.getStone() != 10) {
+                if(player == 1){
+                    /* NODE A */
+                    if(node.getPoint().x == 0) {
+                        Point superNodePoint = new Point(-1, 5);
+                        node.addNeighbor(nodes.get(superNodePoint));
+                    }
+                    /* NODE A' */
+                    if(node.getPoint().x == 10) {
+                        Point superNodePoint = new Point(11, 5);
+                        node.addNeighbor(nodes.get(superNodePoint));
+                    }
+                } else {
+                    /* NODE B */
+                    if(node.getPoint().y == 0) {
+                        Point superNodePoint = new Point(5, -1);
+                        node.addNeighbor(nodes.get(superNodePoint));
+                    }
+                    /* NODE B' */
+                    if(node.getPoint().y == 10) {
+                        Point superNodePoint = new Point(5, 11);
+                        node.addNeighbor(nodes.get(superNodePoint));
+                    }
+                }
                 
-                if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
-                    Point neighborPoint = new Point(nx, ny);
-                    node.addNeighbor(nodes.get(neighborPoint));
+                for (int[] dir : directions) {
+                    int nx = node.getPoint().x + dir[0];
+                    int ny = node.getPoint().y + dir[1];
+                
+                    if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
+                        Point neighborPoint = new Point(nx, ny);
+                        node.addNeighbor(nodes.get(neighborPoint));
+                    }
                 }
             }
+            else {
+                if(node.getPoint().y == 5) {
+                    /* NODE A */
+                    if(node.getPoint().x == -1) {
+                        for(int i = 0; i < size; i++){ 
+                            Point neighborPoint = new Point(0, i);
+                            node.addNeighbor(nodes.get(neighborPoint));   
+                        }
+                    }
+                    else {
+                    /* NODE A' */
+                        for(int i = 0; i < size; i++){ 
+                            Point neighborPoint = new Point(10, i);
+                            node.addNeighbor(nodes.get(neighborPoint));   
+                        }
+                    }
+                }
+                else if (node.getPoint().x == 5) {
+                    /* NODE B */
+                    if(node.getPoint().y == -1) {
+                        for(int i = 0; i < size; i++){ 
+                            Point neighborPoint = new Point(i, 0);
+                            node.addNeighbor(nodes.get(neighborPoint));   
+                        }
+                    }
+                    else {
+                    /* NODE B' */
+                        for(int i = 0; i < size; i++){ 
+                            Point neighborPoint = new Point(i, 10);
+                            node.addNeighbor(nodes.get(neighborPoint));   
+                        }
+                    }
+                }
+            }       
         }
-    }
+    }  
+    
     
     /* Getters */
     public int getNodeStone(int x, int y) {

@@ -11,6 +11,7 @@ import edu.upc.epsevg.prop.hex.MoveNode;
 import edu.upc.epsevg.prop.hex.PlayerMove;
 import edu.upc.epsevg.prop.hex.PlayerType;
 import edu.upc.epsevg.prop.hex.SearchType;
+import edu.upc.epsevg.prop.hex.heuristic.HexGraph.Node;
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,24 +44,25 @@ public class Dijkstra {
         }
     }
 
-    public static PathResult dijkstraShortestPath(HexGraph graph, int player) {
+    public static void dijkstraShortestPath(HexGraph graph, int player) {
         PriorityQueue<Node> pq = new PriorityQueue<>(Comparator.comparingInt(Node::getDistance));
         
         int size = 11;
         
+        Point superNode = (player == 1) ? new Point(-1, 5) : new Point(5, -1);
+        Node startNode = graph.getNode(superNode.x, superNode.y);
+        startNode.setDistance(0);
+        pq.add(startNode);
+        
         
         // ** Configuració de nodes incials ** // 
-        for (int i = 0; i < size; i++) {
+        /*for (int i = 0; i < size; i++) {
+            
             Point startPoint = (player == 1) ? new Point(0, i) : new Point(i, 0);
             
-            Node startNode = graph.getNode(startPoint.x, startPoint.y);
-            if (startNode != null) {
-                startNode.setDistance(0); 
-                pq.add(startNode);
-            }
-        }
-        
-        Node endNode = null;
+            Node initialNode = graph.getNode(startPoint.x, startPoint.y);
+
+        }*/
         
         
         // ** Procesament de nodes ** //
@@ -71,13 +73,6 @@ public class Dijkstra {
             if (currentNode.getState()) continue; 
             currentNode.setState(true);
 
-            if (((player == 1) && (currentNode.getPoint().x == size - 1)) || 
-                ((player == -1) && (currentNode.getPoint().y == size - 1))) {
-                
-                endNode = currentNode;
-                break; 
-            }
-            
             
             // ** Procesem els veïns del node actual... ** //
             for (Node neighbor : currentNode.getNeighbors()) {
@@ -88,77 +83,53 @@ public class Dijkstra {
 
                 if (newDist < neighbor.getDistance()) {
                     neighbor.setDistance(newDist); 
-                    neighbor.setPredecessor(currentNode); 
+                    neighbor.clearPredecessors();
+                    neighbor.addPredecessor(currentNode); 
                     pq.add(neighbor);
                 }
+                else if (newDist == neighbor.getDistance()) {
+                    neighbor.addPredecessor(currentNode);
+                }    
             }
         }
-
-        // ** Reconstrucció del camí més curt ** //
-        if (endNode != null) {
-            List<Point> path = reconstructPath(endNode);
-            return new PathResult(path, endNode.getDistance());
-        }
-        
-        return new PathResult(new ArrayList<>(), Integer.MAX_VALUE);
     }
 
-    
+  
     private static int calculateEdgeWeight(Node current, Node neighbor, int player) {
-        int baseWeight = 2; 
-        int dynamicWeight = calculateDynamicWeight(current, neighbor, player, 11); 
-        return baseWeight + dynamicWeight;
-    }
-
-    private static int calculateDynamicWeight(Node current, Node neighbor, int player, int size) {
-        Point point = neighbor.getPoint();
-        int x = point.x, y = point.y;
-
-        // Proximitat a l'objectiu
-        //int proximity = (player == 1) ? size*2 - x : size*2 - y;
-        
-        int nearInfluence = 0;
-        
-        if(neighbor.getStone() == -player) nearInfluence = 500;
-        else if(neighbor.getStone() == player) nearInfluence = -7;
-        
-        // Influència directa dels veïns
-        int influence = calculateInfluence(current, neighbor, player);
-
-        // Pes combinat
-        return influence + nearInfluence;
-    }
-
-    private static int calculateInfluence(Node current, Node neighbor, int player) {
-        int influence = 0;
-
-        for (Node neighOfNeigh : neighbor.getNeighbors()) {
-            if(!neighOfNeigh.getPoint().equals(current.getPoint())){
-                if (neighOfNeigh.getStone() == 0) {
-                    influence -= 0;
-                } else if (neighOfNeigh.getStone() == -player) {
-                    influence += 2; 
-                }
-                else if (neighOfNeigh.getStone() == player) {
-                    influence -=1;
-                }
-            }
+        if(current.getStone() != 10 && neighbor.getStone() != 10){
+            if(neighbor.getStone() == player) return 2;
+            else if (neighbor.getStone() == -player) return 999;
+            else return 50;
         }
-
-        return influence;
-    }
-
-    private static List<Point> reconstructPath(Node endNode) {
-        List<Point> path = new ArrayList<>();
-        Node current = endNode;
-
-        while (current != null) {
-            path.add(0, current.getPoint());
-            current = current.getPredecessor();
-        }
-
-        return path;
+        else return 0;
     }
     
     
+public static int reconstructPaths(HexGraph.Node startNode, HexGraph.Node endNode) {
+    List<List<HexGraph.Node>> allPaths = new ArrayList<>();
+    List<HexGraph.Node> currentPath = new ArrayList<>();
+
+    // Reconstruct all paths recursively
+    reconstructPathsHelper(endNode, startNode, currentPath, allPaths);
+
+    // Return the number of alternative paths
+    return allPaths.size();
+}
+
+private static void reconstructPathsHelper(HexGraph.Node current, HexGraph.Node startNode, List<HexGraph.Node> currentPath, List<List<HexGraph.Node>> allPaths) {
+    currentPath.add(current);
+
+    if (current.equals(startNode)) {
+        List<HexGraph.Node> path = new ArrayList<>(currentPath);
+        Collections.reverse(path);
+        allPaths.add(path);
+    } else {
+        for (HexGraph.Node predecessor : current.getPredecessor()) {
+            reconstructPathsHelper(predecessor, startNode, currentPath, allPaths);
+        }
+    }
+
+    currentPath.remove(currentPath.size() - 1);
+}
+        
 }
