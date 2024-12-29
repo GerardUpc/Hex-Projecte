@@ -51,7 +51,7 @@ public class Node {
         this.stone = stone;
         
         this.state = false;
-        this.distance = 777777777;
+        this.distance = Integer.MAX_VALUE;
         this.predecessors = new ArrayList<>();
         this.neighbors = new ArrayList<>();
 
@@ -124,7 +124,7 @@ public class Node {
                 '}';
     }
 }
-    private Map<Point, Node> nodes;
+    public Map<Point, Node> nodes;
     
     /* Constructor */
     public HexGraph(int size, HexGameStatus s, int player) {

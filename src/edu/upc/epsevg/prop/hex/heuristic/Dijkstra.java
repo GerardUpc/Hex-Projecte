@@ -26,23 +26,7 @@ import java.util.*;
  */
 public class Dijkstra {
     
-    public static class PathResult {
-        private List<Point> path;
-        private int totalCost;
 
-        public PathResult(List<Point> path, int totalCost) {
-            this.path = path;
-            this.totalCost = totalCost;
-        }
-
-        public List<Point> getPath() {
-            return path;
-        }
-
-        public int getTotalCost() {
-            return totalCost;
-        }
-    }
 
     public static void dijkstraShortestPath(HexGraph graph, int player) {
         PriorityQueue<Node> pq = new PriorityQueue<>(Comparator.comparingInt(Node::getDistance));
@@ -98,38 +82,38 @@ public class Dijkstra {
     private static int calculateEdgeWeight(Node current, Node neighbor, int player) {
         if(current.getStone() != 10 && neighbor.getStone() != 10){
             if(neighbor.getStone() == player) return 2;
-            else if (neighbor.getStone() == -player) return 999;
-            else return 50;
+            else if (neighbor.getStone() == -player) return 9999;
+            else return 10;
         }
         else return 0;
     }
     
     
-public static int reconstructPaths(HexGraph.Node startNode, HexGraph.Node endNode) {
-    List<List<HexGraph.Node>> allPaths = new ArrayList<>();
-    List<HexGraph.Node> currentPath = new ArrayList<>();
+    public static int reconstructPaths(HexGraph.Node startNode, HexGraph.Node endNode) {
+        List<List<HexGraph.Node>> allPaths = new ArrayList<>();
+        List<HexGraph.Node> currentPath = new ArrayList<>();
 
-    // Reconstruct all paths recursively
-    reconstructPathsHelper(endNode, startNode, currentPath, allPaths);
+        // Reconstruct all paths recursively
+        reconstructPathsHelper(endNode, startNode, currentPath, allPaths);
 
-    // Return the number of alternative paths
-    return allPaths.size();
-}
-
-private static void reconstructPathsHelper(HexGraph.Node current, HexGraph.Node startNode, List<HexGraph.Node> currentPath, List<List<HexGraph.Node>> allPaths) {
-    currentPath.add(current);
-
-    if (current.equals(startNode)) {
-        List<HexGraph.Node> path = new ArrayList<>(currentPath);
-        Collections.reverse(path);
-        allPaths.add(path);
-    } else {
-        for (HexGraph.Node predecessor : current.getPredecessor()) {
-            reconstructPathsHelper(predecessor, startNode, currentPath, allPaths);
-        }
+        // Return the number of alternative paths
+        return allPaths.size();
     }
 
-    currentPath.remove(currentPath.size() - 1);
-}
+    private static void reconstructPathsHelper(HexGraph.Node current, HexGraph.Node startNode, List<HexGraph.Node> currentPath, List<List<HexGraph.Node>> allPaths) {
+        currentPath.add(current);
+
+        if (current.equals(startNode)) {
+            List<HexGraph.Node> path = new ArrayList<>(currentPath);
+            Collections.reverse(path);
+            allPaths.add(path);
+        } else {
+            for (HexGraph.Node predecessor : current.getPredecessor()) {
+                reconstructPathsHelper(predecessor, startNode, currentPath, allPaths);
+            }
+        }
+
+        currentPath.remove(currentPath.size() - 1);
+    }
         
 }

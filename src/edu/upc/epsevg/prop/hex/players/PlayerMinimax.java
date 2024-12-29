@@ -152,11 +152,11 @@ public class PlayerMinimax implements IPlayer, IAuto {
             }
         }
         
-        System.out.println("LeafCount (nodos hoja evaluados) = " + leafCount);
-        System.out.println("Mejor valor de la raíz = " + bestValue);
+        //System.out.println("LeafCount (nodos hoja evaluados) = " + leafCount);
+        //System.out.println("Mejor valor de la raíz = " + bestValue);
         
         // Devolvemos el movimiento calculado
-        return new PlayerMove(bestMove, 0, 0, SearchType.MINIMAX);
+        return new PlayerMove(bestMove, depth, leafCount, SearchType.MINIMAX);
     }
 
     // -----------------------------------------------------------------------------------
@@ -257,48 +257,95 @@ public class PlayerMinimax implements IPlayer, IAuto {
     // -----------------------------------------------------------------------------------
     private int evaluateBoard(HexGameStatus board, Point movement) {
         leafCount++;  
+        
+        int remainingMoves = board.getMoves().size();
+        
+       double[] factors = calculateDynamicFactors(121, remainingMoves);
+       double delta = factors[0];
+       double gamma = factors[1];
 
-        int gamma = 20;
-        int delta = 1;
-        
-        // Grafo para "nuestro" color
-        HexGraph a = new HexGraph(11, board, player);
-        Dijkstra.dijkstraShortestPath(a, player);
-        
-        Node myStartNode = (player == 1) 
-            ? a.getNode(-1, 5) 
-            : a.getNode(5, -1);
-        
+        // Rang esperat (ajusta aquests valors segons les característiques del joc)
+        int minPathCostRange = 22;
+        int maxPathCostRange = 110; // Suposant un màxim cost de camí raonable
+        int minAltPathsRange = 1;
+        int maxAltPathsRange = 1500; // Suposant un màxim raonable de camins alternatius
 
-        Node myLastNode = (player == 1) 
-            ? a.getNode(11, 5) 
-            : a.getNode(5, 11);
-        
+    // Grafo per al "nostre" color
+    HexGraph a = new HexGraph(11, board, player);
+    Dijkstra.dijkstraShortestPath(a, player);
 
-        int myMinPathCost = myLastNode.getDistance();
-        int myAltPaths = reconstructPaths(myStartNode, myLastNode);
-        
-        
-        // Grafo para el rival
-        HexGraph b = new HexGraph(11, board, -player);
-        Dijkstra.dijkstraShortestPath(b, -player);
-        
-        Node oppStartNode = (player == 1) 
-            ? b.getNode(5, -1) 
-            : b.getNode(-1, 5);
-        
-        Node oppLastNode = (player == 1) 
-            ? b.getNode(5, 11) 
-            : b.getNode(11, 5);
-        
-        
-        int oppMinCost  = oppLastNode.getDistance();
-        int oppAltPaths = reconstructPaths(oppStartNode, oppLastNode);
+    Node myStartNode = (player == 1) 
+        ? a.getNode(-1, 5) 
+        : a.getNode(5, -1);
 
-        // Fórmula simple: 
-        //  (Mis factores) - (Factores del rival)
-        return (-gamma * myMinPathCost + delta * myAltPaths) - 3*(-gamma * oppMinCost + delta * oppAltPaths);
-    }
+    Node myLastNode = (player == 1) 
+        ? a.getNode(11, 5) 
+        : a.getNode(5, 11);
+
+    int myMinPathCost = myLastNode.getDistance();
+    int myAltPaths = reconstructPaths(myStartNode, myLastNode);
+
+    // Normalització per al "nostre" costat
+    double myNormalizedMinPathCost = normalizeTo100(myMinPathCost, minPathCostRange, maxPathCostRange);
+    double myNormalizedAltPaths = normalizeTo100(myAltPaths, minAltPathsRange, maxAltPathsRange);
+
+    // Grafo per al rival
+    HexGraph b = new HexGraph(11, board, -player);
+    Dijkstra.dijkstraShortestPath(b, -player);
+
+    Node oppStartNode = (player == 1) 
+        ? b.getNode(5, -1) 
+        : b.getNode(-1, 5);
+
+    Node oppLastNode = (player == 1) 
+        ? b.getNode(5, 11) 
+        : b.getNode(11, 5);
+
+    int oppMinCost  = oppLastNode.getDistance();
+    int oppAltPaths = reconstructPaths(oppStartNode, oppLastNode);
+
+    // Normalització per al rival
+    double oppNormalizedMinCost = normalizeTo100(oppMinCost, minPathCostRange, maxPathCostRange);
+    double oppNormalizedAltPaths = normalizeTo100(oppAltPaths, minAltPathsRange, maxAltPathsRange);
+
+    // Fórmula normalitzada: 
+    return (int)((-gamma * myNormalizedMinPathCost + delta * myNormalizedAltPaths)
+               - 6*(-gamma * oppNormalizedMinCost + delta * oppNormalizedAltPaths));
+}
+
+/**
+ * Normalitza un valor al rang [0, 100].
+ */
+private double normalizeTo100(int value, int min, int max) {
+    if (max - min == 0) return 0; // Per evitar divisió per zero
+    return (double)(value - min) / (max - min) * 100;
+}
+
+    /**
+ * Calcula els valors dinàmics de delta i gamma basats en el progrés de la partida.
+ *
+ * @param totalMoves Nombre total de moviments al principi de la partida.
+ * @param remainingMoves Nombre de moviments que queden.
+ * @return Un array de dos valors: [delta, gamma].
+ */
+private double[] calculateDynamicFactors(int totalMoves, int remainingMoves) {
+    // Configuració inicial i final dels valors
+    double deltaInitial = 8.0;
+    double deltaFinal = 1.0;
+    double gammaInitial = 1.0;
+    double gammaFinal = 3.0;
+
+    // Percentatge de partida restant
+    double progress = (double) remainingMoves / totalMoves;
+
+    // Càlcul de delta (disminueix de forma quadràtica)
+    double delta = deltaFinal + (deltaInitial - deltaFinal) * Math.pow(progress, 2);
+
+    // Càlcul de gamma (augmenta de forma lineal)
+    double gamma = gammaInitial + (gammaFinal - gammaInitial) * (1 - progress);
+
+    return new double[]{1.0, 3.0};
+}
 
     // -----------------------------------------------------------------------------------
     // MOVE ORDERING: generamos movimientos y los ordenamos
@@ -333,6 +380,8 @@ public class PlayerMinimax implements IPlayer, IAuto {
 
         return moves;
     }
+    
+
 
     // -----------------------------------------------------------------------------------
     // INICIALIZACIÓN DE ZOBRIST
