@@ -33,11 +33,11 @@ public class Game {
                 
                 //IPlayer player1 = new RandomPlayer("dwdw");
                 
-                IPlayer player1 = new MecMec_IterativeDepth(3);
+                IPlayer player1 = new MecMec_IterativeDepth(4);
                 
                 //IPlayer player2 = new HumanPlayer("Human");
                                 
-                new Board(player1 , player2, 11 /*mida*/,  10/*s*/, false);
+                new Board(player1 , player2, 11,  10, false);
                 //HeadlessGame jaja = new HeadlessGame(new PlayerMinimax(3), new H_E_X_Player(2/*GB*/), 11, 30, 1);
       
  

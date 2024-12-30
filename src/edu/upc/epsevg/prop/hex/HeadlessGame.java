@@ -4,6 +4,7 @@ package edu.upc.epsevg.prop.hex;
 
 import edu.upc.epsevg.prop.hex.players.H_E_X_Player;
 import edu.upc.epsevg.prop.hex.players.MecMec_FixedDepth;
+import edu.upc.epsevg.prop.hex.players.MecMec_IterativeDepth;
 import edu.upc.epsevg.prop.hex.players.HumanPlayer;
 import edu.upc.epsevg.prop.hex.players.RandomPlayer;
 import java.lang.ref.WeakReference;
@@ -26,17 +27,17 @@ public class HeadlessGame {
     private int timeout;
     private int size;
     
-    public static void main(String[] args) {
+   /* public static void main(String[] args) {
 
 
-        IPlayer player1 = new MecMec_FixedDepth(3);
-        IPlayer player2 = new H_E_X_Player(2/*GB*/);                    
+        IPlayer player2 = new MecMec_IterativeDepth(4);
+        IPlayer player1 = new H_E_X_Player(2);                    
         
-        HeadlessGame game = new HeadlessGame(player1, player2, 11, 10/*s timeout*/, 10/*games*/);
+        HeadlessGame game = new HeadlessGame(player1, player2, 11, 10, 10);
         GameResult gr = game.start();
         System.out.println(gr);
 
-    }
+    }*/
 
     //=====================================================================================0
     public HeadlessGame(IPlayer p1, IPlayer p2, int size, int timeout, int gameCount) {
