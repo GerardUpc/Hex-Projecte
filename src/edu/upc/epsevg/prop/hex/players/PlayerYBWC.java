@@ -1,5 +1,4 @@
 package edu.upc.epsevg.prop.hex.players;
-
 import edu.upc.epsevg.prop.hex.heuristic.Dijkstra;
 import edu.upc.epsevg.prop.hex.heuristic.HexGraph;
 import edu.upc.epsevg.prop.hex.IAuto;
@@ -17,25 +16,22 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 /**
- * Minimax a profundidad fija con:
- *  - Poda Alfa-Beta
- *  - Tablas de Transposición (Zobrist hashing)
- *  - Move Ordering (ordenación de movimientos)
- *  - Evaluación con Dijkstra
+ *
+ * @author alexsaiztalavera
  */
-public class PlayerMinimax implements IPlayer, IAuto {
-    
-    private String name;
+public class PlayerYBWC implements IPlayer, IAuto{
+     private String name;
     private int depth;            // Profundidad fija
     private int player;           // player=1 (jugador1) o -1 (jugador2)
     private PlayerType playertype;
     private boolean poda = true;  // Activar/desactivar poda
     private boolean timeoutOccurred;
-    //private ExecutorService executor;
     // Contador de hojas evaluadas (para debug)
     private int leafCount;
+    private ExecutorService executor;
 
     // ================================
     //       TABLA DE TRANSPOSICIÓN
@@ -77,7 +73,7 @@ public class PlayerMinimax implements IPlayer, IAuto {
     // -----------------------------------------------------------------------------------
     // CONSTRUCTOR
     // -----------------------------------------------------------------------------------
-    public PlayerMinimax(int depth) {
+    public PlayerYBWC(int depth) {
         this.name = "PlayerMinimax_Transposition";
         this.depth = depth;
         this.timeoutOccurred = false;
@@ -86,6 +82,7 @@ public class PlayerMinimax implements IPlayer, IAuto {
         
         // Iniciamos Zobrist hashing con valores aleatorios
         initZobrist(11);
+        this.executor = Executors.newCachedThreadPool();
     }
 
     @Override
@@ -108,159 +105,155 @@ public class PlayerMinimax implements IPlayer, IAuto {
     // -----------------------------------------------------------------------------------
     @Override
     public PlayerMove move(HexGameStatus s) {
-        // Identificamos si somos player1 o player2
         this.timeoutOccurred = false;
-        player = s.getCurrentPlayerColor(); 
-        if (player == 1) {
-            playertype = PlayerType.PLAYER1;
-        } else {
-            playertype = PlayerType.PLAYER2;
-        }
-        
-        // Reseteamos contador de hojas
+        player = s.getCurrentPlayerColor();
+        playertype = (player == 1) ? PlayerType.PLAYER1 : PlayerType.PLAYER2;
         leafCount = 0;
-        
-        // Variables para la raíz de minimax
-        int bestValue = Integer.MIN_VALUE;
-        int alpha = Integer.MIN_VALUE;
-        int beta  = Integer.MAX_VALUE;
-        
-        Point bestMove = new Point(0,0);
-        
-        // Generamos y ordenamos los movimientos (move ordering)
-        List<Point> moves = generateOrderedMoves(s, true);
-        
-        // Recorremos cada movimiento en profundidad "depth"
-        for (Point mv : moves) {
-            // Clonamos el estado y aplicamos la jugada
-            if (timeoutOccurred) {
-            break; // Aturar la cerca si s'ha produït el timeout
-        }
 
-            HexGameStatus newBoard = new HexGameStatus(s);
-            newBoard.placeStone(mv);
-            
-            // Llamamos a Minimax (nivel del rival => isMaximizing=false)
-            int value = minMax(newBoard, depth - 1, false, alpha, beta, mv);
-            
-            HexGraph TEST = new HexGraph(11, newBoard, player);
-            Dijkstra.dijkstraShortestPath(TEST, player);
-            int pepe =  evaluateBoard(newBoard, mv);
-            
-            // Actualizamos mejor valor
-            if(value > bestValue) {
-                bestValue = value;
-                bestMove = mv;
-            }
-            alpha = Math.max(alpha, bestValue);
-            
-            // Poda
-            if (beta <= alpha && poda) {
-                break;
-            }
-        }
+        List<Point> moves = generateOrderedMoves(s, true);
+        Point bestMove = executeYBWC(moves, s);
+
         if (bestMove == null && !moves.isEmpty()) {
             bestMove = moves.get(0);
         }
-        //System.out.println("LeafCount (nodos hoja evaluados) = " + leafCount);
-        //System.out.println("Mejor valor de la raíz = " + bestValue);
-        
-        // Devolvemos el movimiento calculado
+
         return new PlayerMove(bestMove, leafCount, depth, SearchType.MINIMAX);
     }
     
+    private Point executeYBWC(List<Point> moves, HexGameStatus state) {
+        AtomicInteger alpha = new AtomicInteger(Integer.MIN_VALUE);
+        int beta = Integer.MAX_VALUE;
+        Point bestMove = null;
+
+        // Processar el primer moviment seqüencialment
+        Point firstMove = moves.get(0);
+        HexGameStatus firstState = new HexGameStatus(state);
+        firstState.placeStone(firstMove);
+        int firstValue = minMax(firstState, depth - 1, false, alpha.get(), beta, firstMove);
+
+        if (firstValue > alpha.get()) {
+            alpha.set(firstValue);
+            bestMove = firstMove;
+        }
+
+        // Processar els moviments restants en paral·lel
+        ExecutorService executor = Executors.newFixedThreadPool(moves.size() - 1);
+        List<Future<MoveEvaluation>> futures = new ArrayList<>();
+
+        for (int i = 1; i < moves.size(); i++) {
+            Point mv = moves.get(i);
+            futures.add(executor.submit(() -> {
+                HexGameStatus newState = new HexGameStatus(state);
+                newState.placeStone(mv);
+                int eval = minMax(newState, depth - 1, false, alpha.get(), beta, mv);
+                return new MoveEvaluation(mv, eval);
+            }));
+        }
+
+        // Reunim els resultats dels fils
+        try {
+            for (Future<MoveEvaluation> future : futures) {
+                MoveEvaluation result = future.get();
+                synchronized (alpha) {
+                    if (result.value > alpha.get()) {
+                        alpha.set(result.value);
+                        bestMove = result.move;
+                    }
+                    if (beta <= alpha.get()) {
+                        break; // Poda alfa-beta
+                    }
+                }
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+        } finally {
+            executor.shutdown();
+        }
+
+        return bestMove;
+    }
     // -----------------------------------------------------------------------------------
     // FUNCIÓN RECURSIVA MINIMAX CON PODA Y TT
     // -----------------------------------------------------------------------------------
     private int minMax(HexGameStatus board, int depth, boolean isMaximizing, int alpha, int beta, Point move) {
-        // 1) Consultar la Tabla de Transposición
+        if (timeoutOccurred || depth == 0 || board.isGameOver()) {
+            return evaluateBoard(board,move);
+        }
+
         long key = computeZobristKey(board);
         TTEntry ttEntry = transpositionTable.get(key);
-        
-        if(ttEntry != null && ttEntry.depth >= depth) {
-            // Ya tenemos un valor calculado a esta profundidad o mayor
-            switch(ttEntry.flag) {
+        if (ttEntry != null && ttEntry.depth >= depth) {
+            switch (ttEntry.flag) {
                 case EXACT:
                     return ttEntry.value;
                 case LOWER:
-                    // valor >= ttEntry.value
                     alpha = Math.max(alpha, ttEntry.value);
                     break;
                 case UPPER:
-                    // valor <= ttEntry.value
                     beta = Math.min(beta, ttEntry.value);
                     break;
             }
-            if(alpha >= beta && poda) {
+            if (alpha >= beta) {
                 return ttEntry.value;
             }
         }
-        
-        // 2) Comprobamos si se acabó la partida o la profundidad
-        if(board.isGameOver()) {
-            // Ajusta la escala según prefieras: multiplicar por (depth+1) premia ganar antes
-            if(board.GetWinner() == playertype) {
-                return 5555555 * (depth+1);
-            } else {
-                return -5555555 * (depth+1);
-            }
-        }
-        if(depth == 0 || board.getMoves().isEmpty()) {
-            int val = evaluateBoard(board, move);
-            // Lo guardamos en TT como EXACT
-            transpositionTable.put(key, new TTEntry(val, depth, TTEntry.Flag.EXACT, alpha, beta));
-            return val;
-        }
-        
-        // 3) Minimax
-        int originalAlpha = alpha;
+
         int bestValue = isMaximizing ? Integer.MIN_VALUE : Integer.MAX_VALUE;
-        
-        // Generamos y ordenamos los movimientos
         List<Point> moves = generateOrderedMoves(board, isMaximizing);
 
-        if(isMaximizing) {
-            for(Point mv : moves) {
-                HexGameStatus newBoard = new HexGameStatus(board);
-                newBoard.placeStone(mv);
+        for (Point mv : moves) {
+            HexGameStatus newBoard = new HexGameStatus(board);
+            newBoard.placeStone(mv);
+            int eval = minMax(newBoard, depth - 1, !isMaximizing, alpha, beta, mv);
 
-                int eval = minMax(newBoard, depth - 1, false, alpha, beta, move);
+            if (isMaximizing) {
                 bestValue = Math.max(bestValue, eval);
                 alpha = Math.max(alpha, bestValue);
-
-                if(beta <= alpha && poda) {
-                    break;
-                }
-            }
-        } else {
-            for(Point mv : moves) {
-                HexGameStatus newBoard = new HexGameStatus(board);
-                newBoard.placeStone(mv);
-
-                int eval = minMax(newBoard, depth - 1, true, alpha, beta, move);
+            } else {
                 bestValue = Math.min(bestValue, eval);
                 beta = Math.min(beta, bestValue);
+            }
 
-                if(beta <= alpha && poda) {
-                    break;
+            if (beta <= alpha) {
+                break;
+            }
+        }
+
+        TTEntry.Flag flag = (bestValue <= alpha) ? TTEntry.Flag.UPPER : (bestValue >= beta) ? TTEntry.Flag.LOWER : TTEntry.Flag.EXACT;
+        transpositionTable.put(key, new TTEntry(bestValue, depth, flag, alpha, beta));
+
+        return bestValue;
+    }
+     
+    // -----------------------------------------------------------------------------------
+    // MOVE ORDERING: generamos movimientos y los ordenamos
+    // -----------------------------------------------------------------------------------
+   
+    
+     private List<Point> generateOrderedMoves(HexGameStatus board, boolean isMaximizing) {
+        List<Point> moves = new ArrayList<>();
+        int size = board.getSize();
+
+        for (int x = 0; x < size; x++) {
+            for (int y = 0; y < size; y++) {
+                if (board.getPos(x, y) == 0) {
+                    moves.add(new Point(x, y));
                 }
             }
         }
 
-        // 4) Guardar en TT con el flag adecuado
-        TTEntry.Flag flag;
-        if(bestValue <= originalAlpha) {
-            flag = TTEntry.Flag.UPPER; // valor <= alpha
-        } else if(bestValue >= beta) {
-            flag = TTEntry.Flag.LOWER; // valor >= beta
-        } else {
-            flag = TTEntry.Flag.EXACT; 
-        }
-        
-        transpositionTable.put(key, new TTEntry(bestValue, depth, flag, alpha, beta));
-        
-        return bestValue;
+        moves.sort(Comparator.comparingDouble(p -> {
+            double cx = size / 2.0;
+            double cy = size / 2.0;
+            double dx = p.x - cx;
+            double dy = p.y - cy;
+            return Math.hypot(dx, dy);
+        }));
+
+        return moves;
     }
+    
+    
 
     // -----------------------------------------------------------------------------------
     // EVALUACIÓN CON DIJKSTRA
@@ -331,7 +324,7 @@ private double normalizeTo100(int value, int min, int max) {
     return (double)(value - min) / (max - min) * 100;
 }
 
-    /**
+ /**
  * Calcula els valors dinàmics de delta i gamma basats en el progrés de la partida.
  *
  * @param totalMoves Nombre total de moviments al principi de la partida.
@@ -356,42 +349,6 @@ private double[] calculateDynamicFactors(int totalMoves, int remainingMoves) {
 
     return new double[]{1.0, 3.0};
 }
-
-    // -----------------------------------------------------------------------------------
-    // MOVE ORDERING: generamos movimientos y los ordenamos
-    // -----------------------------------------------------------------------------------
-    private List<Point> generateOrderedMoves(HexGameStatus board, boolean isMaximizing) {
-        List<Point> moves = new ArrayList<>();
-        int size = board.getSize();
-
-        // 1) Recolectar celdas vacías
-        for(int x=0; x<size; x++) {
-            for(int y=0; y<size; y++) {
-                if(board.getPos(x,y) == 0) {
-                    moves.add(new Point(x,y));
-                }
-            }
-        }
-
-        // 2) Ordenar. Ejemplo: cercanía al centro.
-        double cx = size / 2.0;
-        double cy = size / 2.0;
-
-        moves.sort(Comparator.comparingDouble((Point p) -> {
-            double dx = p.x - cx;
-            double dy = p.y - cy;
-            return Math.hypot(dx, dy);
-        }));
-        
-        // Si prefieres que el MAX explore primero las casillas más cercanas,
-        // pero el MIN las más alejadas, podrías invertir el orden cuando isMaximizing = false.
-        // Por ejemplo:
-        // if(!isMaximizing) Collections.reverse(moves);
-
-        return moves;
-    }
-    
-
 
     // -----------------------------------------------------------------------------------
     // INICIALIZACIÓN DE ZOBRIST
@@ -435,6 +392,15 @@ private double[] calculateDynamicFactors(int totalMoves, int remainingMoves) {
             }
         }
         return h;
+    }
+    private static class MoveEvaluation {
+        Point move;
+        int value;
+
+        MoveEvaluation(Point move, int value) {
+            this.move = move;
+            this.value = value;
+        }
     }
     
 }
