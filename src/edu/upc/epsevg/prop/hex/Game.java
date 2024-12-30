@@ -1,6 +1,6 @@
 package edu.upc.epsevg.prop.hex;
 
-import edu.upc.epsevg.prop.hex.players.PlayerMinimax;
+import edu.upc.epsevg.prop.hex.players.MecMec_FixedDepth;
 import edu.upc.epsevg.prop.hex.players.HumanPlayer;
 import edu.upc.epsevg.prop.hex.players.RandomPlayer;
 import edu.upc.epsevg.prop.hex.IPlayer;
@@ -8,7 +8,7 @@ import edu.upc.epsevg.prop.hex.IPlayer;
 import edu.upc.epsevg.prop.hex.IPlayer;
 import edu.upc.epsevg.prop.hex.players.H_E_X_Player;
 import edu.upc.epsevg.prop.hex.HeadlessGame;
-import edu.upc.epsevg.prop.hex.players.PlayerYBWC;
+import edu.upc.epsevg.prop.hex.players.MecMec_IterativeDepth;
 
 
 
@@ -33,7 +33,7 @@ public class Game {
                 
                 //IPlayer player1 = new RandomPlayer("dwdw");
                 
-                IPlayer player1 = new PlayerYBWC(3);
+                IPlayer player1 = new MecMec_IterativeDepth(3);
                 
                 //IPlayer player2 = new HumanPlayer("Human");
                                 

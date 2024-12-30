@@ -1,7 +1,3 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package edu.upc.epsevg.prop.hex.heuristic;
 
 import edu.upc.epsevg.prop.hex.HexGameStatus;
@@ -19,119 +15,135 @@ import java.awt.Point;
 import java.util.HashMap;
 import java.util.Map;
 
-
-
-
 /**
  *
- * Implementation of a hashmap to store the Hex board graph.
- * Every node is the key of their neighbours.
+ * Implementació d'una hashtable per a emmagatzemar el graf del tauler, el punt (x, y) del node es la clau del node.
  * 
- * @author GERARD
+ * Hi ha dos super nodes, depenent de qui s'analitzi el tauler, A i A' o B i B' 
+ * ¡Suposem que el tauler es de 11x11!
+ * 
  */
 public class HexGraph {
-    /* Auxiliary data structure Node */
-    
-public class Node {
-    
-    /* Basic data */
-    private Point point;             // Cordenades x y             
-    private int stone;               // 0 = buit, 1 = player 1, -1 = player 2
     
     
-    /* Dijkstra data */
-    private boolean state;           
-    private int distance;            // Distancia desde el punt inicial
-    private List<Node> predecessors;  // Node anterior al camí més curt
-    private List<Node> neighbors;
+    // =================================
+    //   Auxiliary data structure Node
+    // =================================
+    public class Node {
+    
+        /* Basic data */
+        private Point point;              // Cordenades x y             
+        private int stone;                // 0 = buit, 1 = player 1, -1 = player 2
+    
+    
+        /* Dijkstra data */
+        private boolean state;           
+        private int distance;             // Distancia desde el punt inicial
+        private List<Node> predecessors;  // Node anterior al camí més curt
+        private List<Node> neighbors;
 
-    /* Constructor */
-    public Node(int x, int y, int stone) {
-        this.point = new Point(x, y);
-        this.stone = stone;
+        /* Constructor */
+        public Node(int x, int y, int stone) {
+            this.point = new Point(x, y);
+            this.stone = stone;
         
-        this.state = false;
-        this.distance = Integer.MAX_VALUE;
-        this.predecessors = new ArrayList<>();
-        this.neighbors = new ArrayList<>();
+            this.state = false;
+            this.distance = Integer.MAX_VALUE;
+            this.predecessors = new ArrayList<>();
+            this.neighbors = new ArrayList<>();
+        }
 
-    }
+        /* Getters */
+        public Point getPoint() {
+            return point;
+        }
 
-    /* Getters */
-    public Point getPoint() {
-        return point;
-    }
+        public int getStone() {
+            return stone;
+        }
+    
+        public Boolean getState() {
+            return state;
+        }
+    
+        public int getDistance() {
+            return distance;
+        }
+    
+        public List<Node> getPredecessor() {
+            return predecessors;
+        }
+    
+        public List<Node> getNeighbors() {
+            return neighbors;
+        }
 
-    public int getStone() {
-        return stone;
-    }
+        /* Setters */
+        public void setStone(int stone) {
+            this.stone = stone;
+        }
     
-    public Boolean getState() {
-        return state;
-    }
+        public void setState(Boolean state) {
+            this.state = state;
+        }
     
-    public int getDistance() {
-        return distance;
-    }
-    
-    public List<Node> getPredecessor() {
-        return predecessors;
-    }
-    
-    public List<Node> getNeighbors() {
-        return neighbors;
-    }
-
-    
-    /* Setters */
-    public void setStone(int stone) {
-        this.stone = stone;
-    }
-    
-    public void setState(Boolean state) {
-        this.state = state;
-    }
-    
-    public void setDistance(int distance) {
-        this.distance = distance;
-    }
+        public void setDistance(int distance) {
+            this.distance = distance;
+        }
     
 
-    
-    
-    /* Other methods */
+        /* Other methods */
    
-    public void addNeighbor(Node neighbor) {
-        neighbors.add(neighbor);
+        public void addNeighbor(Node neighbor) {
+            neighbors.add(neighbor);
+        }
+    
+        public void addPredecessor(Node predecessor) {
+            predecessors.add(predecessor);
+        }
+    
+        public void clearPredecessors() {
+            predecessors.clear();
+        }
+    
+        @Override
+        public String toString() {
+            return "Node{" +
+                    "point=" + point +
+                    ", stone=" + stone +
+                    ", neighbors=" + neighbors.size() +
+                    ", state=" + state + 
+                    ", predecesors=" + predecessors.size() +
+                    '}';
+        }
     }
     
-    public void addPredecessor(Node predecessor) {
-        predecessors.add(predecessor);
-    }
-    
-    public void clearPredecessors() {
-        predecessors.clear();
-    }
-    
-    @Override
-    public String toString() {
-        return "Node{" +
-                "point=" + point +
-                ", stone=" + stone +
-                ", neighbors=" + neighbors.size() +
-                ", state=" + state + 
-                ", predecesors=" + predecessors.size() +
-                '}';
-    }
-}
     public Map<Point, Node> nodes;
     
-    /* Constructor */
+    
+    /**
+     * Constructor del graf.
+     * Inicialitza els nodes del graf en funció de l'estat del tauler i afegeix les connexions entre ells.
+     *
+     * @param size   mida del tauler (especificat com 11x11 per defecte)
+     * @param s      estat actual del joc Hex
+     * @param player jugador actual (1 o -1)
+     */
     public HexGraph(int size, HexGameStatus s, int player) {
+        
         this.nodes = new HashMap<>();
         initializeHexBoard(size, s, player);
     }
-
+    
+    
+    /**
+     * Inicialitza el tauler hexagonal creant els nodes i connectant-los amb els seus veïns.
+     * També afegeix supernodes en funció del jugador que s'analitza.
+     *
+     * @param size   mida del tauler
+     * @param s      estat actual del joc Hex
+     * @param player jugador actual (1 o -1)
+     */
     private void initializeHexBoard(int size, HexGameStatus s, int player) {
     
         for (int x = 0; x < size; x++) {
@@ -144,8 +156,7 @@ public class Node {
             }
         }
         
-         /* Creació dels super nodes... */
-         
+        /* Creació dels super nodes... */ 
         int[][] cordinates = {
             {-1, 5}, {11, 5}, {5, -1}, {5, 11}
         };
@@ -158,7 +169,6 @@ public class Node {
             
         }
         
-
         /* Connexió dels veïns... */
         int[][] directions = {
             {-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, 1}, {1, -1}
@@ -239,19 +249,39 @@ public class Node {
     }  
     
     
-    /* Getters */
+    /**
+     * Retorna l'estat de la pedra (stone) en un node específic.
+     *
+     * @param x coordenada X del node
+     * @param y coordenada Y del node
+     * @return estat de la pedra al node (0, 1, -1 o 999 si no existeix)
+     */
     public int getNodeStone(int x, int y) {
         Node node = nodes.get(new Point(x, y));
         return (node != null) ? node.getStone() : 999; 
     }
     
+    
+    /**
+     * Retorna el node en la posició especificada.
+     *
+     * @param x coordenada X del node
+     * @param y coordenada Y del node
+     * @return el node en la posició especificada o null si no existeix
+     */
     public Node getNode(int x, int y) {
         Node node = nodes.get(new Point(x, y));
         return (node != null) ? node : null;
     }
     
     
-    /* Setters */
+    /**
+     * Estableix l'estat de la pedra (stone) en un node específic.
+     *
+     * @param x     coordenada X del node
+     * @param y     coordenada Y del node
+     * @param stone estat de la pedra a establir
+     */
     public void setNodeStone(int x, int y, int stone) {
         Node node = nodes.get(new Point(x, y));
         if (node != null) {
@@ -260,9 +290,14 @@ public class Node {
             System.out.println("El node (" + x + "," + y + ") no existeix.");
         }
     }
-
-
-    /* Other methods */
+    
+    
+    /**
+     * Imprimeix tots els veïns d'un node específic.
+     *
+     * @param x coordenada X del node
+     * @param y coordenada Y del node
+     */
     public void printNeighbors(int x, int y) {
         Node node = nodes.get(new Point(x, y));
         if (node != null) {
@@ -275,6 +310,10 @@ public class Node {
         }
     }
 
+    
+    /**
+     * Imprimeix el graf complet, incloent els detalls de tots els nodes.
+     */
     public void printGraph() {
         for (Node node : nodes.values()) {
             System.out.println(node);

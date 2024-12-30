@@ -1,26 +1,17 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package edu.upc.epsevg.prop.hex.players;
-
-/**
- *
- * @author GERARD
- */
 
 public class TTEntry {
     public enum Flag {
-        EXACT,    // Valor exacto
-        LOWER,    // Nodo de tipo alfa (corte por debajo)
-        UPPER     // Nodo de tipo beta (corte por encima)
+        EXACT,    // Valor exacte
+        LOWER,    // Nodo de tipus alfa 
+        UPPER     // Nodo de tipus beta 
     }
 
     public int value;      // La evaluación guardada
-    public int depth;      // Profundidad a la que se calculó
-    public Flag flag;      // Tipo de nodo
-    public int alpha;      // Alfa en el momento de almacenar
-    public int beta;       // Beta en el momento de almacenar
+    public int depth;      // Profunditat a la que es va calcular
+    public Flag flag;      // Tipus de node
+    public int alpha;      // Alfa en el moment de emmagatzemar
+    public int beta;       // Beta en el moment de emmagatzemar
 
     public TTEntry(int value, int depth, Flag flag, int alpha, int beta) {
         this.value = value;
