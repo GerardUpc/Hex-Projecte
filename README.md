@@ -7,7 +7,7 @@ Aquest projecte ha estat desenvolupat per:
 - **Alejandro Saiz**
 
 ## Descripció
-Aquest repositori conté diverses implementacions de jugadors per al joc Hex, incloent:
+Aquest repositori conté diverses implementacions de jugadors per al joc Hex a edu/upc/epsevg/prop/hex/players, incloent:
 
 - **Minimax amb profunditat fixa** i poda Alfa-Beta.
 - **Iterative deepening** amb paral·lelització (YBWC).
