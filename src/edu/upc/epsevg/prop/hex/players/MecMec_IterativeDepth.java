@@ -20,7 +20,7 @@ import java.util.Random;
 import java.util.concurrent.*;
 
 /**
- * Minimax de profunditat fixa amb:
+ * Minimax de profunditat amb timeout amb:
  *  - Poda Alfa-Beta
  *  - Taules de transposició (Zobrist hashing)
  *  - Move Ordering (ordenació de movimients)
