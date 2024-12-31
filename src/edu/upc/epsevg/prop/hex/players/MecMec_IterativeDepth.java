@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.*;
 
 /**
  * Minimax de profunditat fixa amb:
@@ -24,6 +25,7 @@ import java.util.Random;
  *  - Taules de transposició (Zobrist hashing)
  *  - Move Ordering (ordenació de movimients)
  *  - Evaluació amb Dijkstra
+ *  - Paralelisme amb YBWC
  */
 public class MecMec_IterativeDepth implements IPlayer, IAuto {
     
@@ -43,26 +45,24 @@ public class MecMec_IterativeDepth implements IPlayer, IAuto {
     // ================================
     //          ZOBRIST HASHING
     // ================================
-    // Per a un tauler 11x11 i 3 posibles estats: 0(buit), 1(player1), -1(player2)
-    // Mapegem: 0 -> index=0, 1 -> index=1, -1 -> index=2
     private long[][][] zobristTable; 
 
-    
+    private static final ExecutorService executor = Executors.newCachedThreadPool();
+
     // -----------------------------------------------------------------------------------
     // CLASE AUXILIAR: Entrada de la Taula de Transposició
     // -----------------------------------------------------------------------------------
     private static class TTEntry {
-        // Flag del node
         enum Flag {
-            EXACT,   // Valor exacte
-            LOWER,   // Limit inferior (NODE ALPHA)
-            UPPER    // Limit superior (NODE BETA)
+            EXACT,
+            LOWER,
+            UPPER
         }
-        int value;   // Valor emmagatzemat 
-        int depth;   // Profunditat a la que es va obtenir el valor
-        Flag flag;   // Tipus de node (EXACT, LOWER, UPPER)
-        int alpha;   // Alfa en el moment d'emmagatzemar
-        int beta;    // Beta en el moment d'emmagatzemar
+        int value;
+        int depth;
+        Flag flag;
+        int alpha;
+        int beta;
 
         TTEntry(int value, int depth, Flag flag, int alpha, int beta) {
             this.value = value;
@@ -73,56 +73,28 @@ public class MecMec_IterativeDepth implements IPlayer, IAuto {
         }
     }
 
-    
     // -----------------------------------------------------------------------------------
     // CONSTRUCTOR
     // -----------------------------------------------------------------------------------
-    
-    /**
-     * Constructor que inicialitza els paràmetres del jugador, 
-     * incloent la profunditat fixa de cerca, taules de transposició i hashing Zobrist.
-     *
-     * @param depth profunditat fixa de cerca
-     */
     public MecMec_IterativeDepth(int depth) {
         this.name = "MecMec_IterativeDepth";
         this.depth = depth;
-         this.timeoutOccurred = false;
+        this.timeoutOccurred = false;
         this.transpositionTable = new HashMap<>();
         initZobrist(11);
     }
-    
-    
-    /**
-     * Retorna el nom del jugador.
-     *
-     * @return el nom del jugador ("MecMec_FixedDepth")
-     */
+
     @Override
     public String getName() {
         return name;
     }
 
-
-     @Override
+    @Override
     public void timeout() {
-        // No action
         timeoutOccurred = true;
-        //System.out.println("Timeout detectat: el joc ha excedit el límit de temps!");
     }
 
-    
-    // -------------------------------------------------------------------------------------------------------------------
-    // METODE PRINCIPAL: Construeix l'arbre de decisions desde l'arrel, amb 121 fills, el escollit sera el millor moviment
-    // -------------------------------------------------------------------------------------------------------------------
-    
-    /**
-     * Determina el millor moviment utilitzant l'algorisme Minimax amb poda Alfa-Beta.
-     *
-     * @param s estat actual del joc Hex
-     * @return el moviment escollit amb informació addicional
-     */
-     @Override
+    @Override
     public PlayerMove move(HexGameStatus s) {
         int actualdepth = 0;
         this.timeoutOccurred = false;
@@ -138,8 +110,7 @@ public class MecMec_IterativeDepth implements IPlayer, IAuto {
         Point bestMove = new Point(0, 0);
         int bestValue = Integer.MIN_VALUE;
 
-        // Iterative Deepening Loop
-        for (int currentDepth = 1; ; currentDepth++) {
+        for (int currentDepth = 1; currentDepth <= depth; currentDepth++) {
             int alpha = Integer.MIN_VALUE;
             int beta = Integer.MAX_VALUE;
             int currentBestValue = Integer.MIN_VALUE;
@@ -147,179 +118,159 @@ public class MecMec_IterativeDepth implements IPlayer, IAuto {
 
             List<Point> moves = generateOrderedMoves(s);
 
-            for (Point mv : moves) {
-                if (timeoutOccurred) {
-                    break;
-                }
+            if (moves.isEmpty() || timeoutOccurred) break;
 
-                HexGameStatus newBoard = new HexGameStatus(s);
-                newBoard.placeStone(mv);
+            // Evaluate first move sequentially (Young Brothers Wait Concept)
+            Point firstMove = moves.get(0);
+            HexGameStatus newBoard = new HexGameStatus(s);
+            newBoard.placeStone(firstMove);
+            int value = minMax(newBoard, currentDepth - 1, false, alpha, beta, firstMove);
+            if (value > currentBestValue) {
+                currentBestValue = value;
+                currentBestMove = firstMove;
+            }
+            alpha = Math.max(alpha, currentBestValue);
 
-                int value = minMax(newBoard, currentDepth - 1, false, alpha, beta, mv);
+            // Parallel evaluation of the rest of the moves
+            List<Future<int[]>> futures = new ArrayList<>();
 
-                if (value > currentBestValue) {
-                    currentBestValue = value;
-                    currentBestMove = mv;
-                }
+            int finalAlpha = alpha;
+            int finalBeta = beta;
+            int finalCurrentDepth = currentDepth;
 
-                alpha = Math.max(alpha, currentBestValue);
+            for (int i = 1; i < moves.size(); i++) {
+            Point mv = moves.get(i);
+            futures.add(executor.submit(() -> {
+                if (timeoutOccurred) return null;
+                HexGameStatus parallelBoard = new HexGameStatus(s);
+                parallelBoard.placeStone(mv);
+                int eval = minMax(parallelBoard, finalCurrentDepth - 1, false, finalAlpha, finalBeta, mv);
+                return new int[]{eval, mv.x, mv.y};
+            }));
+}
 
-                if (beta <= alpha && poda) {
-                    break;
+
+            for (Future<int[]> future : futures) {
+                if (timeoutOccurred) break;
+                try {
+                    int[] result = future.get();
+                    if (result != null) {
+                        int eval = result[0];
+                        Point mv = new Point(result[1], result[2]);
+                        if (eval > currentBestValue) {
+                            currentBestValue = eval;
+                            currentBestMove = mv;
+                        }
+                        alpha = Math.max(alpha, currentBestValue);
+                        if (beta <= alpha && poda) {
+                            break;
+                        }
+                    }
+                } catch (InterruptedException | ExecutionException e) {
+                    e.printStackTrace();
                 }
             }
 
-            if (timeoutOccurred) {
-                    break;
-            }
+            if (timeoutOccurred) break;
 
-            // Update best move and best value after each depth search
             bestMove = currentBestMove;
             bestValue = currentBestValue;
-            actualdepth++;
+            actualdepth = currentDepth;
         }
 
         return new PlayerMove(bestMove, leafCount, actualdepth, SearchType.MINIMAX);
     }
 
-    
-    
-    // -----------------------------------------------------------------------------------
-    // FUNCIÓ RECURSIVA MINIMAX AMB PODA I TT
-    // -----------------------------------------------------------------------------------
-    
-    /**
-     * Implementa l'algorisme Minimax amb poda Alfa-Beta i suport per taules de transposició.
-     *
-     * @param board estat del tauler
-     * @param depth profunditat restant
-     * @param isMaximizing indica si el node actual és de maximització
-     * @param alpha valor alfa per a la poda
-     * @param beta valor beta per a la poda
-     * @param move moviment actual considerat
-     * @return el valor heurístic del node
-     */
     private int minMax(HexGameStatus board, int depth, boolean isMaximizing, int alpha, int beta, Point move) {
-        if (timeoutOccurred) {
-                    return 0;
-                }
-        // 1) Consultem la taula de transposició
+        if (timeoutOccurred) return 0;
         long key = computeZobristKey(board);
         TTEntry ttEntry = transpositionTable.get(key);
-        
-        if(ttEntry != null && ttEntry.depth >= depth) {
-            // Ja tenim un valor calculat a aquesta profundidat o major
-            switch(ttEntry.flag) {
+
+        if (ttEntry != null && ttEntry.depth >= depth) {
+            switch (ttEntry.flag) {
                 case EXACT:
                     return ttEntry.value;
                 case LOWER:
-                    // valor >= ttEntry.value
                     alpha = Math.max(alpha, ttEntry.value);
                     break;
                 case UPPER:
-                    // valor <= ttEntry.value
                     beta = Math.min(beta, ttEntry.value);
                     break;
             }
-            if(alpha >= beta && poda) {
+            if (alpha >= beta && poda) {
                 return ttEntry.value;
             }
         }
-        
-        // 2) Comprovem si s'ha acabat la partida o la profunditat
-        if(board.isGameOver()) {
-            if(board.GetWinner() == playertype) {
+
+        if (board.isGameOver()) {
+            if (board.GetWinner() == playertype) {
                 return 100000 * (depth);
             } else {
                 return -100000 * (depth);
             }
         }
-        if(depth == 0 || board.getMoves().isEmpty()) {
+        if (depth == 0 || board.getMoves().isEmpty()) {
             int val = evaluateBoard(board);
-            // Ho guardem a TT com EXACT
             transpositionTable.put(key, new TTEntry(val, depth, TTEntry.Flag.EXACT, alpha, beta));
             return val;
         }
-        
-        // 3) Minimax
+
         int originalAlpha = alpha;
         int bestValue = isMaximizing ? Integer.MIN_VALUE : Integer.MAX_VALUE;
-        
-        // Generem i ordenem els moviments
+
         List<Point> moves = generateOrderedMoves(board);
 
-        if(isMaximizing) {
-            for(Point mv : moves) {
+        if (isMaximizing) {
+            for (Point mv : moves) {
                 HexGameStatus newBoard = new HexGameStatus(board);
                 newBoard.placeStone(mv);
-
                 int eval = minMax(newBoard, depth - 1, false, alpha, beta, move);
                 bestValue = Math.max(bestValue, eval);
                 alpha = Math.max(alpha, bestValue);
-
-                if(beta <= alpha && poda) {
+                if (beta <= alpha && poda) {
                     break;
                 }
             }
         } else {
-            for(Point mv : moves) {
+            for (Point mv : moves) {
                 HexGameStatus newBoard = new HexGameStatus(board);
                 newBoard.placeStone(mv);
-
                 int eval = minMax(newBoard, depth - 1, true, alpha, beta, move);
                 bestValue = Math.min(bestValue, eval);
                 beta = Math.min(beta, bestValue);
-
-                if(beta <= alpha && poda) {
+                if (beta <= alpha && poda) {
                     break;
                 }
             }
         }
 
-        // 4) Ho guardem a TT amb el flag adequat
         TTEntry.Flag flag;
-        if(bestValue <= originalAlpha) {
-            flag = TTEntry.Flag.UPPER; // valor <= alpha
-        } else if(bestValue >= beta) {
-            flag = TTEntry.Flag.LOWER; // valor >= beta
+        if (bestValue <= originalAlpha) {
+            flag = TTEntry.Flag.UPPER;
+        } else if (bestValue >= beta) {
+            flag = TTEntry.Flag.LOWER;
         } else {
-            flag = TTEntry.Flag.EXACT; 
+            flag = TTEntry.Flag.EXACT;
         }
-        
+
         transpositionTable.put(key, new TTEntry(bestValue, depth, flag, alpha, beta));
-        
+
         return bestValue;
     }
 
-    
-    // -----------------------------------------------------------------------------------
-    // EVALUACIÓ AMB DIJKSTRA
-    // -----------------------------------------------------------------------------------
-    
-    /**
-     * Avalua l'estat del tauler utilitzant l'algorisme de Dijkstra per calcular camins curts i alternatius.
-     *
-     * @param board estat actual del tauler
-     * @return un valor heurístic que representa la qualitat del tauler
-     */
     private int evaluateBoard(HexGameStatus board) {
         leafCount++;  
-        
         int remainingMoves = board.getMoves().size();
-        
-       double[] factors = calculateDynamicFactors(121, remainingMoves);
-       double delta = factors[0];
-       double gamma = factors[1];
+        double[] factors = calculateDynamicFactors(121, remainingMoves);
+        double delta = factors[0];
+        double gamma = factors[1];
+        int minPathCostRange = 22;
+        int maxPathCostRange = 110; 
+        int minAltPathsRange = 1;
+        int maxAltPathsRange = 1500; 
 
-       int minPathCostRange = 22;
-       int maxPathCostRange = 110; 
-       
-       int minAltPathsRange = 1;
-       int maxAltPathsRange = 1500; 
-
-       // Graf per al "nostre" color
-       HexGraph a = new HexGraph(11, board, player);
-       Dijkstra.dijkstraShortestPath(a, player);
+        HexGraph a = new HexGraph(11, board, player);
+        Dijkstra.dijkstraShortestPath(a, player);
 
         Node myStartNode = (player == 1) 
             ? a.getNode(-1, 5) 
@@ -332,11 +283,9 @@ public class MecMec_IterativeDepth implements IPlayer, IAuto {
         int myMinPathCost = myLastNode.getDistance();
         int myAltPaths = reconstructPaths(myStartNode, myLastNode);
 
-        // Normalització per al "nostre" costat
         double myNormalizedMinPathCost = normalizeTo100(myMinPathCost, minPathCostRange, maxPathCostRange);
         double myNormalizedAltPaths = normalizeTo100(myAltPaths, minAltPathsRange, maxAltPathsRange);
 
-        // Graf per al rival
         HexGraph b = new HexGraph(11, board, -player);
         Dijkstra.dijkstraShortestPath(b, -player);
 
@@ -351,71 +300,36 @@ public class MecMec_IterativeDepth implements IPlayer, IAuto {
         int oppMinCost  = oppLastNode.getDistance();
         int oppAltPaths = reconstructPaths(oppStartNode, oppLastNode);
 
-        // Normalització per al rival
         double oppNormalizedMinCost = normalizeTo100(oppMinCost, minPathCostRange, maxPathCostRange);
         double oppNormalizedAltPaths = normalizeTo100(oppAltPaths, minAltPathsRange, maxAltPathsRange);
 
-        // Fórmula normalitzada
         return (int)((-gamma * myNormalizedMinPathCost + delta * myNormalizedAltPaths)
                  - 6*(-gamma * oppNormalizedMinCost + delta * oppNormalizedAltPaths));
     }
 
-    
-    /**
-     * Normalitza un valor al rang [0, 100].
-     *
-     * @param value valor a normalitzar
-     * @param min valor mínim del rang
-     * @param max valor màxim del rang
-     * @return valor normalitzat
-     */
     private double normalizeTo100(int value, int min, int max) {
-        if (max - min == 0) return 0; // Per evitar divisió per zero
+        if (max - min == 0) return 0;
         return (double)(value - min) / (max - min) * 100;
     }
 
-    /**
-     * Calcula els valors dinàmics de delta i gamma basats en el progrés de la partida.
-     *
-     * @param totalMoves Nombre total de moviments al principi de la partida.
-     * @param remainingMoves Nombre de moviments que queden.
-     * @return Un array de dos valors: [delta, gamma].
-     */
     private double[] calculateDynamicFactors(int totalMoves, int remainingMoves) {
-        // Configuració inicial i final dels valors
         double deltaInitial = 8.0;
         double deltaFinal = 1.0;
         double gammaInitial = 1.0;
         double gammaFinal = 3.0;
 
-        // Percentatge de partida restant
         double progress = (double) remainingMoves / totalMoves;
 
-        // Càlcul de delta (disminueix de forma quadràtica)
         double delta = deltaFinal + (deltaInitial - deltaFinal) * Math.pow(progress, 2);
-
-        // Càlcul de gamma (augmenta de forma lineal)
         double gamma = gammaInitial + (gammaFinal - gammaInitial) * (1 - progress);
 
         return new double[]{1.0, 3.0};
     }
 
-    
-    // -----------------------------------------------------------------------------------
-    // MOVE ORDERING: generem movimients i els ordenem
-    // -----------------------------------------------------------------------------------
-    
-    /**
-     * Genera i ordena els moviments possibles basant-se en la proximitat al centre del tauler.
-     *
-     * @param board estat actual del tauler
-     * @return llista de moviments ordenats
-     */
     private List<Point> generateOrderedMoves(HexGameStatus board) {
         List<Point> moves = new ArrayList<>();
         int size = board.getSize();
 
-        // 1) Recolectar celes buides
         for(int x=0; x<size; x++) {
             for(int y=0; y<size; y++) {
                 if(board.getPos(x,y) == 0) {
@@ -424,7 +338,6 @@ public class MecMec_IterativeDepth implements IPlayer, IAuto {
             }
         }
 
-        // 2) Ordenem per proximitat al centre
         double cx = size / 2.0;
         double cy = size / 2.0;
 
@@ -436,63 +349,37 @@ public class MecMec_IterativeDepth implements IPlayer, IAuto {
         
         return moves;
     }
-    
-    
-    // -----------------------------------------------------------------------------------
-    // INICIALITZACIÓ DE ZOBRIST
-    // -----------------------------------------------------------------------------------
-    
-    /**
-     * Inicialitza els valors de la taula Zobrist per a un tauler d'una mida donada.
-     *
-     * @param size mida del tauler
-     */
+
     private void initZobrist(int size) {
         Random rand = new Random();
         zobristTable = new long[size][size][3]; 
-        // 3 estados => index 0(vacío), 1(player1), -1(player2) 
 
         for(int x=0; x<size; x++) {
             for(int y=0; y<size; y++) {
                 for(int st=0; st<3; st++) {
-                    // st = 0(vacío), 1(player1), -1(player2)
                     zobristTable[x][y][st] = rand.nextLong();
                 }
             }
         }
     }
 
-    
-    // -----------------------------------------------------------------------------------
-    // CÁLCUL DE LA CLAU ZOBRIST D'UN TAULER
-    // -----------------------------------------------------------------------------------
-    
-    /**
-     * Calcula la clau Zobrist corresponent a l'estat actual del tauler.
-     *
-     * @param board estat del tauler
-     * @return clau Zobrist
-     */
     private long computeZobristKey(HexGameStatus board) {
         long h = 0L;
         int size = board.getSize();
         for(int x=0; x<size; x++) {
             for(int y=0; y<size; y++) {
-                int c = board.getPos(x,y); // c = 0, 1, -1
+                int c = board.getPos(x,y);
                 int st; 
                 if(c == 0) {
-                    st = 0; // buit
+                    st = 0;
                 } else if(c == 1) {
-                    st = 1; // player1
+                    st = 1;
                 } else {
-                    // c == -1 => player2
                     st = 2;
                 }
-                // XOR amb el valor zobrist corresponent
                 h ^= zobristTable[x][y][st];
             }
         }
         return h;
     }
- 
 }

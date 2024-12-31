@@ -27,17 +27,18 @@ public class HeadlessGame {
     private int timeout;
     private int size;
     
-   /* public static void main(String[] args) {
+    public static void main(String[] args) {
 
 
         IPlayer player2 = new MecMec_IterativeDepth(4);
-        IPlayer player1 = new H_E_X_Player(2);                    
         
-        HeadlessGame game = new HeadlessGame(player1, player2, 11, 10, 10);
+        IPlayer player1 = new H_E_X_Player(2);                  
+        
+        HeadlessGame game = new HeadlessGame(player1, player2, 11, 10, 1);
         GameResult gr = game.start();
         System.out.println(gr);
 
-    }*/
+    }
 
     //=====================================================================================0
     public HeadlessGame(IPlayer p1, IPlayer p2, int size, int timeout, int gameCount) {
@@ -63,64 +64,70 @@ public class HeadlessGame {
     }
 
     private PlayerType play(IPlayer player, IPlayer player0) {
-        this.status = new HexGameStatus(size);
+    this.status = new HexGameStatus(size);
 
-        while (!this.status.isGameOver()) {
+    while (!this.status.isGameOver()) {
 
-            final Semaphore semaphore = new Semaphore(1);
-            semaphore.tryAcquire();
-            //System.out.println("." + new Date());
-            final Result r = new Result();
-            PlayerType cp = status.getCurrentPlayer();
-            Thread t1 = new Thread(() -> {
-                PlayerMove m = null;
-                try {
-                    m = players[cp == PlayerType.PLAYER1 ? 0 : 1].move(new HexGameStatus(status));
-                } catch(Exception ex) {
-                    System.out.println("Excepció descontrolada al player:"+cp.name());
-                    ex.printStackTrace();
-                }
-                if (m != null) {
-                    status.placeStone(m.getPoint());
-                } else {
-                    status.forceLoser();
-                }
-                System.out.print(cp==PlayerType.PLAYER1?"1":"2");
-                r.ok = true;
-                semaphore.release();
-            });
-
-            Thread t2 = new Thread(() -> {
-                try {
-                    Thread.sleep(HeadlessGame.this.timeout * 1000);
-                } catch (InterruptedException ex) {
-                }
-                if (!r.ok) {
-                    players[cp == PlayerType.PLAYER1 ? 0 : 1].timeout();
-                }
-            });
-
-            t1.start();
-            t2.start();
-            long WAIT_EXTRA_TIME = 2000;
+        final Semaphore semaphore = new Semaphore(1);
+        semaphore.tryAcquire();
+        final Result r = new Result();
+        PlayerType cp = status.getCurrentPlayer();
+        Thread t1 = new Thread(() -> {
+            PlayerMove m = null;
             try {
-                if (!semaphore.tryAcquire(1, timeout * 1000 + WAIT_EXTRA_TIME, TimeUnit.MILLISECONDS)) {
-
-                    System.out.println("Espera il·legal ! Player trampós:"+cp.name());
-                    //throw new RuntimeException("Jugador trampós ! Espera il·legal !");
-                    // Som millors persones deixant que el jugador il·legal continui jugant...
-                    semaphore.acquire();
-                }
-
-            } catch (InterruptedException ex) {
-                Logger.getLogger(HeadlessGame.class.getName()).log(Level.SEVERE, null, ex);
+                // MEDIR EL TIEMPO DE EJECUCIÓN DEL MOVIMIENTO
+                long startTime = System.nanoTime(); // Inicio del tiempo
+                m = players[cp == PlayerType.PLAYER1 ? 0 : 1].move(new HexGameStatus(status));
+                if(cp == PlayerType.PLAYER2) System.out.println("Profundidad: " + m.getMaxDepthReached());
+                long endTime = System.nanoTime(); // Fin del tiempo
+                
+                // Calculamos el tiempo en milisegundos
+                long durationMs = (endTime - startTime) / 1_000_000;
+                if(cp == PlayerType.PLAYER2) System.out.println("Jugador " + (cp == PlayerType.PLAYER1 ? "1" : "2") + 
+                                   " tardó: " + durationMs + " ms en hacer su movimiento.");
+                                  
+            } catch(Exception ex) {
+                System.out.println("Excepció descontrolada al player:" + cp.name());
+                ex.printStackTrace();
             }
-            // Netegem la memòria (for free!)
-            gc();
-            
+            if (m != null) {
+                status.placeStone(m.getPoint());
+            } else {
+                status.forceLoser();
+            }
+            //System.out.print(cp == PlayerType.PLAYER1 ? "1" : "2");
+            r.ok = true;
+            semaphore.release();
+        });
+
+        Thread t2 = new Thread(() -> {
+            try {
+                Thread.sleep(HeadlessGame.this.timeout * 1000);
+            } catch (InterruptedException ex) {
+            }
+            if (!r.ok) {
+                players[cp == PlayerType.PLAYER1 ? 0 : 1].timeout();
+            }
+        });
+
+        t1.start();
+        t2.start();
+        long WAIT_EXTRA_TIME = 2000;
+        try {
+            if (!semaphore.tryAcquire(1, timeout * 1000 + WAIT_EXTRA_TIME, TimeUnit.MILLISECONDS)) {
+
+                System.out.println("Espera il·legal ! Player trampós:" + cp.name());
+                semaphore.acquire();
+            }
+
+        } catch (InterruptedException ex) {
+            Logger.getLogger(HeadlessGame.class.getName()).log(Level.SEVERE, null, ex);
         }
-        return status.winnerPlayer;
+        gc();
     }
+    return status.winnerPlayer;
+}
+
 
     private class GameResult {
 
